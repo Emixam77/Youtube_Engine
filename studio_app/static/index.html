@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antigravity Creative Studio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar: Navigation & Libraries -->
+        <aside class="sidebar">
+            <div class="logo-area">
+                <span class="logo-icon">🛸</span>
+                <h1>Antigravity Studio</h1>
+            </div>
+            
+            <nav class="tabs-nav">
+                <button class="nav-btn active" data-tab="youtube">📺 YouTube Pipe</button>
+                <button class="nav-btn" data-tab="marketing">📣 Marketing Pipe</button>
+                <button class="nav-btn" data-tab="creation">🎨 Création Libre</button>
+            </nav>
+
+            <div class="library-panel">
+                <h3 class="collapsible-header" id="toggleStylesBtn">🎨 Styles de Collage (9) <span class="toggle-icon">▼</span></h3>
+                <div class="style-list" id="styleList">
+                    <!-- Styles dynamically loaded here -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="main-content">
+            <header class="workspace-header">
+                <h2 id="currentTabTitle">Pipeline YouTube</h2>
+                <button class="action-btn positive" id="openCreateModalBtn">➕ Nouveau Projet</button>
+            </header>
+
+            <div class="workspace-left">
+                <!-- Reference Channels (Only on YouTube tab) -->
+                <section class="channels-section" id="channelsSection">
+                    <div class="channels-header">
+                        <h3>📡 Chaînes de Référence</h3>
+                        <div class="channel-add-form">
+                            <input type="text" id="newChannelInput" placeholder="Nom ou URL de la chaîne...">
+                            <button class="action-btn positive small" id="addChannelBtn">Ajouter</button>
+                        </div>
+                    </div>
+                    <div class="channels-list" id="channelsList">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </section>
+
+                <!-- Projects Grid -->
+                <section class="projects-section">
+                    <div class="projects-grid" id="projectsGrid">
+                        <!-- Projects dynamic load -->
+                    </div>
+                </section>
+            </div>
+
+            <!-- Gemini Director Chat Intercom -->
+            <section class="gemini-director-panel">
+                <div class="panel-header">
+                    <h3>💬 Gemini Director</h3>
+                    <span class="status-indicator online">En ligne</span>
+                </div>
+                <div class="chat-history" id="chatHistory">
+                    <div class="message system">
+                        Bonjour ! Je suis votre directeur créatif Gemini. Comment pouvons-nous structurer votre prochaine vidéo aujourd'hui ? Indiquez-moi votre idée de départ ou votre lien d'inspiration.
+                    </div>
+                </div>
+                <div class="chat-quick-actions">
+                    <button class="quick-btn" onclick="sendQuickMessage('Suggère-moi une DA pour un Short de motivation.')">💡 Idée Short</button>
+                    <button class="quick-btn" onclick="sendQuickMessage('Crée-moi un plan de coupe 16:9 pour une explication sur le levier asymétrique.')">♟️ Levier Asymétrique</button>
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="chatInput" placeholder="Écrivez votre idée..." onkeydown="if(event.key === 'Enter') sendChatMessage()">
+                    <button class="send-btn" onclick="sendChatMessage()">🚀</button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Create Page Modal -->
+    <div class="modal-overlay" id="createModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Créer un nouveau projet</h2>
+                <button class="close-btn" id="closeCreateModalBtn">&times;</button>
+            </div>
+            <form id="createProjectForm">
+                <div class="form-group">
+                    <label for="projTitle">Titre du Projet</label>
+                    <input type="text" id="projTitle" required placeholder="Ex: VID-002 - Le Syndrome du Manœuvre">
+                </div>
+                <div class="form-group">
+                    <label for="projFormat">Format</label>
+                    <select id="projFormat">
+                        <option value="📱 Short 9:16">📱 Short (9:16)</option>
+                        <option value="🖥️ Vidéo HD 16:9">🖥️ Vidéo HD (16:9)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="projStyle">Style Visuel / DA</label>
+                    <input type="text" id="projStyle" placeholder="Ex: Tokyo Minimal, Documentary Collage Noir...">
+                </div>
+                <div class="form-group">
+                    <label for="projNotes">Notes de production</label>
+                    <textarea id="projNotes" rows="3" placeholder="Description rapide de l'idée..."></textarea>
+                </div>
+                <button type="submit" class="submit-btn">Synchroniser sur Notion</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Script / Prompts Viewer Modal -->
+    <div class="modal-overlay" id="promptViewerModal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h2 id="viewerProjTitle">Détails & Prompts Google Flow</h2>
+                <button class="close-btn" id="closePromptViewerBtn">&times;</button>
+            </div>
+            <div class="viewer-body">
+                <div class="viewer-meta">
+                    <span class="badge" id="viewerProjFormat">Format</span>
+                    <span class="badge" id="viewerProjStyle">Style</span>
+                </div>
+                <div class="prompts-area" id="viewerPromptsContainer">
+                    <!-- Prompts loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
