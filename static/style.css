@@ -119,16 +119,51 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
-    max-height: 1000px;
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease-out;
+    max-height: 360px;
     opacity: 1;
-    overflow: hidden;
+    overflow-y: auto;
+    padding-right: 4px;
 }
 
 .style-list.collapsed {
     max-height: 0;
     opacity: 0;
     pointer-events: none;
+    overflow-y: hidden;
+}
+
+/* Custom Scrollbars for Style List and Panels */
+.style-list::-webkit-scrollbar,
+.library-panel::-webkit-scrollbar,
+.sidebar::-webkit-scrollbar,
+.chat-history::-webkit-scrollbar,
+.workspace-left::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+
+.style-list::-webkit-scrollbar-track,
+.library-panel::-webkit-scrollbar-track,
+.sidebar::-webkit-scrollbar-track,
+.chat-history::-webkit-scrollbar-track,
+.workspace-left::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.style-list::-webkit-scrollbar-thumb,
+.library-panel::-webkit-scrollbar-thumb,
+.sidebar::-webkit-scrollbar-thumb,
+.chat-history::-webkit-scrollbar-thumb,
+.workspace-left::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+.style-list::-webkit-scrollbar-thumb:hover,
+.chat-history::-webkit-scrollbar-thumb:hover,
+.workspace-left::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-yellow);
 }
 
 /* Reference Channels Section */
