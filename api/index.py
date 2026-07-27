@@ -114,43 +114,150 @@ def get_styles_and_animations():
         ]
     }
 
+def get_env_keys():
+    keys = {
+        "OPENROUTER_API_KEY": os.getenv("OPENROUTER_API_KEY"),
+        "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
+        "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY")
+    }
+    # Fallback to reading LanderGen's .env if local variables are not set
+    landergen_env = "/Users/Emixam/Documents/Antigravity/LanderGen/.env"
+    if os.path.exists(landergen_env):
+        try:
+            with open(landergen_env, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        parts = line.split("=", 1)
+                        key = parts[0].strip()
+                        val = parts[1].strip().strip('"').strip("'")
+                        if key in keys and not keys[key]:
+                            keys[key] = val
+        except Exception:
+            pass
+            
+    # Notion fallback for Notion token and Gemini
+    try:
+        config_path = "/Users/Emixam/.gemini/antigravity/mcp_config.json"
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                config = json.load(f)
+                if not keys["GEMINI_API_KEY"]:
+                    keys["GEMINI_API_KEY"] = config.get("mcpServers", {}).get("notion-mcp-server", {}).get("env", {}).get("GEMINI_API_KEY")
+    except Exception:
+        pass
+    return keys
+
 @app.post("/api/chat")
-def chat_with_gemini(req: ChatRequest):
-    gemini_key = os.getenv("GEMINI_API_KEY")
-    if not gemini_key:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
+def chat_with_ai(req: ChatRequest):
+    keys = get_env_keys()
     
     system_instruction = (
-        "You are the 'Gemini Video Director' for Antigravity Media Engine. Your role is to help the user structure their video ideas. "
+        "You are the 'Creative Studio Director' (Claude 3.5 Sonnet) for Antigravity Media Engine. Your role is to help the user structure their video ideas. "
         "Interact in French, friendly and conversationally. Guide them through choosing the best style from our 10 styles (Tokyo Minimal, "
         "Documentary Collage Noir, Premium Paper Stop-Motion, etc.) and camera motions. Once they align, draft the BROLL scene list."
     )
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
-    headers = {"Content-Type": "application/json"}
-    
-    contents = []
-    for turn in req.history:
+    # 1. Prioritize OpenRouter to call Claude 3.5 Sonnet
+    if keys["OPENROUTER_API_KEY"]:
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {keys['OPENROUTER_API_KEY']}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://localhost:8000",
+            "X-Title": "Antigravity Creative Studio"
+        }
+        
+        messages = [{"role": "system", "content": system_instruction}]
+        for turn in req.history:
+            messages.append({
+                "role": "user" if turn["role"] == "user" else "assistant",
+                "content": turn["text"]
+            })
+        messages.append({"role": "user", "content": req.message})
+        
+        payload = {
+            "model": "anthropic/claude-3.5-sonnet",
+            "messages": messages
+        }
+        
+        req_body = json.dumps(payload).encode("utf-8")
+        http_req = urllib.request.Request(url, data=req_body, headers=headers, method="POST")
+        
+        try:
+            with urllib.request.urlopen(http_req) as res:
+                res_data = json.loads(res.read().decode("utf-8"))
+                text = res_data["choices"][0]["message"]["content"]
+                return {"reply": text}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"OpenRouter Claude error: {str(e)}")
+
+    # 2. Support OpenAI API Key
+    elif keys["OPENAI_API_KEY"]:
+        url = "https://api.openai.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {keys['OPENAI_API_KEY']}",
+            "Content-Type": "application/json"
+        }
+        
+        messages = [{"role": "system", "content": system_instruction}]
+        for turn in req.history:
+            messages.append({
+                "role": "user" if turn["role"] == "user" else "assistant",
+                "content": turn["text"]
+            })
+        messages.append({"role": "user", "content": req.message})
+        
+        # If user points to a custom gateway mapping to Claude, it'll work,
+        # otherwise standard OpenAI maps to gpt-4o as default fallback.
+        payload = {
+            "model": os.getenv("OPENAI_MODEL", "gpt-4o"),
+            "messages": messages
+        }
+        
+        req_body = json.dumps(payload).encode("utf-8")
+        http_req = urllib.request.Request(url, data=req_body, headers=headers, method="POST")
+        
+        try:
+            with urllib.request.urlopen(http_req) as res:
+                res_data = json.loads(res.read().decode("utf-8"))
+                text = res_data["choices"][0]["message"]["content"]
+                return {"reply": text}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"OpenAI error: {str(e)}")
+
+    # 3. Fallback to Gemini
+    elif keys["GEMINI_API_KEY"]:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={keys['GEMINI_API_KEY']}"
+        headers = {"Content-Type": "application/json"}
+        
+        contents = []
+        for turn in req.history:
+            contents.append({
+                "role": "user" if turn["role"] == "user" else "model",
+                "parts": [{"text": turn["text"]}]
+            })
         contents.append({
-            "role": "user" if turn["role"] == "user" else "model",
-            "parts": [{"text": turn["text"]}]
+            "role": "user",
+            "parts": [{"text": f"System Guidelines: {system_instruction}\nUser Message: {req.message}"}]
         })
-    contents.append({
-        "role": "user",
-        "parts": [{"text": f"System Guidelines: {system_instruction}\nUser Message: {req.message}"}]
-    })
-    
-    payload = {"contents": contents}
-    req_body = json.dumps(payload).encode("utf-8")
-    http_req = urllib.request.Request(url, data=req_body, headers=headers, method="POST")
-    
-    try:
-        with urllib.request.urlopen(http_req) as res:
-            res_data = json.loads(res.read().decode("utf-8"))
-            text = res_data["candidates"][0]["content"]["parts"][0]["text"]
-            return {"reply": text}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        
+        payload = {"contents": contents}
+        req_body = json.dumps(payload).encode("utf-8")
+        http_req = urllib.request.Request(url, data=req_body, headers=headers, method="POST")
+        
+        try:
+            with urllib.request.urlopen(http_req) as res:
+                res_data = json.loads(res.read().decode("utf-8"))
+                text = res_data["candidates"][0]["content"]["parts"][0]["text"]
+                return {"reply": text}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+            
+    else:
+        raise HTTPException(status_code=500, detail="Aucune clé d'API valide trouvée (OpenRouter, OpenAI ou Gemini)")
 
 # Reference Channels Storage File
 CHANNELS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reference_channels.json")
