@@ -179,7 +179,7 @@ def chat_with_ai(req: ChatRequest):
         messages.append({"role": "user", "content": req.message})
         
         payload = {
-            "model": "anthropic/claude-3.5-sonnet",
+            "model": os.getenv("OPENROUTER_MODEL", "anthropic/claude-3-haiku"),
             "messages": messages
         }
         

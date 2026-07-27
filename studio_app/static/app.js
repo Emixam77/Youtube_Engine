@@ -211,11 +211,16 @@ async function sendChatMessage() {
         });
         const data = await response.json();
         
+        if (!response.ok) {
+            appendMessage('system', `Erreur : ${data.detail || 'Erreur inconnue de l\'API'}`);
+            return;
+        }
+        
         appendMessage('system', data.reply);
         chatHistory.push({role: 'user', text: text});
         chatHistory.push({role: 'system', text: data.reply});
     } catch (error) {
-        appendMessage('system', 'Erreur : impossible de contacter Gemini.');
+        appendMessage('system', 'Erreur : impossible de contacter le serveur.');
     }
 }
 
