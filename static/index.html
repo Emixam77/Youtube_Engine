@@ -79,7 +79,7 @@
                     <button class="quick-btn" onclick="sendQuickMessage('Crée-moi un plan de coupe 16:9 pour une explication sur le levier asymétrique.')">♟️ Levier Asymétrique</button>
                 </div>
                 <div class="chat-input-area">
-                    <input type="text" id="chatInput" placeholder="Écrivez votre idée..." onkeydown="if(event.key === 'Enter') sendChatMessage()">
+                    <textarea id="chatInput" rows="6" placeholder="Écrivez votre idée ou collez votre script ici... (Cmd+Entrée pour envoyer)" onkeydown="if(event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); sendChatMessage(); }"></textarea>
                     <button class="send-btn" onclick="sendChatMessage()">🚀</button>
                 </div>
             </section>
