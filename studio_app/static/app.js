@@ -336,3 +336,54 @@ async function deleteChannel(name) {
         console.error(error);
     }
 }
+
+async function validateChatToNotion() {
+    if (chatHistory.length === 0) {
+        alert("La conversation est vide. Veuillez d'abord échanger avec le directeur créatif.");
+        return;
+    }
+    
+    const btn = document.getElementById('validateChatBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '⚡ Envoi en cours...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/chat/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                database_type: currentTab,
+                history: chatHistory
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            btn.innerHTML = '✅ Envoyé !';
+            btn.style.background = '#2ed573';
+            btn.style.borderColor = '#2ed573';
+            btn.style.color = '#fff';
+            
+            loadProjects();
+            
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.style.background = '';
+                btn.style.borderColor = '';
+                btn.style.color = '';
+                btn.disabled = false;
+            }, 3000);
+        } else {
+            alert(`Erreur lors de la validation : ${data.detail || 'Erreur inconnue'}`);
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    } catch (error) {
+        console.error(error);
+        alert("Erreur réseau lors de la validation du chat.");
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}

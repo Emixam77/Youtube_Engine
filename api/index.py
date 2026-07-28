@@ -62,6 +62,10 @@ class PageRequest(BaseModel):
 class ChannelModel(BaseModel):
     name: str
 
+class ValidateRequest(BaseModel):
+    database_type: str
+    history: List[Dict[str, str]]
+
 # API Endpoints
 @app.get("/api/databases/{db_type}")
 def get_database(db_type: str):
@@ -258,6 +262,156 @@ def chat_with_ai(req: ChatRequest):
             
     else:
         raise HTTPException(status_code=500, detail="Aucune clé d'API valide trouvée (OpenRouter, OpenAI ou Gemini)")
+
+@app.post("/api/chat/validate")
+def validate_chat_to_notion(req: ValidateRequest):
+    keys = get_env_keys()
+    
+    # 1. Prepare chat conversation transcript for the AI
+    transcript = ""
+    for turn in req.history:
+        role = "Utilisateur" if turn["role"] == "user" else "Assistant"
+        transcript += f"{role}: {turn['text']}\n"
+        
+    system_instruction = (
+        "Tu es un assistant de base de données. Analyse la conversation suivante et extrait les paramètres "
+        "nécessaires pour créer un projet vidéo Notion. Tu dois renvoyer STRICTEMENT un objet JSON valide "
+        "avec les clés suivantes :\n"
+        "- title : Le titre du projet (court et créatif, ex: '🩷 The Curse')\n"
+        "- format : Le format exact parmi : '📱 Short 9:16' ou '🖥️ Vidéo HD 16:9'\n"
+        "- style : Le style visuel ou la DA identifiée (ex: 'Style 10 — Premium Paper Stop-Motion')\n"
+        "- camera : L'archétype de caméra parmi : '🚀 Le Voleur', '🎯 Le Rack Focus', '🔄 Le Chasseur', '🌊 Le Plongeur', '♟️ L'Orbiteur'\n"
+        "- notes : Un résumé structuré du script et des prompts d'images associés.\n"
+        "Ne renvoie aucun autre texte que le JSON."
+    )
+    
+    ai_reply = None
+    if keys["OPENROUTER_API_KEY"]:
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {keys['OPENROUTER_API_KEY']}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://localhost:8000",
+            "X-Title": "Antigravity Creative Studio"
+        }
+        payload = {
+            "model": "anthropic/claude-3-haiku",
+            "messages": [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": f"Voici la conversation :\n\n{transcript}"}
+            ],
+            "response_format": {"type": "json_object"}
+        }
+        req_body = json.dumps(payload).encode("utf-8")
+        http_req = urllib.request.Request(url, data=req_body, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(http_req) as res:
+                res_data = json.loads(res.read().decode("utf-8"))
+                ai_reply = res_data["choices"][0]["message"]["content"]
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"OpenRouter extraction error: {str(e)}")
+            
+    elif keys["OPENAI_API_KEY"]:
+        url = "https://api.openai.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {keys['OPENAI_API_KEY']}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "gpt-4o",
+            "messages": [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": f"Voici la conversation :\n\n{transcript}"}
+            ],
+            "response_format": {"type": "json_object"}
+        }
+        req_body = json.dumps(payload).encode("utf-8")
+        http_req = urllib.request.Request(url, data=req_body, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(http_req) as res:
+                res_data = json.loads(res.read().decode("utf-8"))
+                ai_reply = res_data["choices"][0]["message"]["content"]
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"OpenAI extraction error: {str(e)}")
+            
+    elif keys["GEMINI_API_KEY"]:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={keys['GEMINI_API_KEY']}"
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "contents": [{
+                "parts": [{"text": f"{system_instruction}\n\nVoici la conversation :\n\n{transcript}"}]
+            }]
+        }
+        req_body = json.dumps(payload).encode("utf-8")
+        http_req = urllib.request.Request(url, data=req_body, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(http_req) as res:
+                res_data = json.loads(res.read().decode("utf-8"))
+                ai_reply = res_data["candidates"][0]["content"]["parts"][0]["text"]
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Gemini extraction error: {str(e)}")
+            
+    if not ai_reply:
+        raise HTTPException(status_code=500, detail="Could not extract data from conversation")
+        
+    ai_reply = ai_reply.strip()
+    if ai_reply.startswith("```"):
+        lines = ai_reply.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines[-1].startswith("```"):
+            lines = lines[:-1]
+        ai_reply = "\n".join(lines).strip()
+        
+    try:
+        extracted = json.loads(ai_reply)
+    except Exception:
+        raise HTTPException(status_code=500, detail=f"Invalid JSON extracted by AI: {ai_reply}")
+        
+    db_id = DATABASES.get(req.database_type)
+    if not db_id:
+        raise HTTPException(status_code=404, detail="Database type not found")
+        
+    import datetime
+    current_date = datetime.date.today().isoformat()
+    
+    properties = {}
+    if req.database_type == "creation":
+        properties = {
+            "Titre du Projet": {"title": [{"text": {"content": extracted.get("title", "Projet Création Libre")}}]},
+            "Format": {"select": {"name": extracted.get("format", "📱 Short 9:16")}},
+            "Statut": {"select": {"name": "🔵 En cours"}},
+            "Style Visuel / DA": {"rich_text": [{"text": {"content": extracted.get("style", "Style 10 — Premium Paper Stop-Motion")}}]},
+            "Archétype Caméra": {"select": {"name": extracted.get("camera", "♟️ L'Orbiteur")}},
+            "Mode d'Entrée": {"select": {"name": "✍️ Script Brut"}},
+            "Notes": {"rich_text": [{"text": {"content": extracted.get("notes", "")}}]},
+            "Moteur IA": {"multi_select": [{"name": "Google Flow / OmniFlash"}]},
+            "Date de Création": {"date": {"start": current_date}}
+        }
+    elif req.database_type == "youtube":
+        properties = {
+            "Titre du Post": {"title": [{"text": {"content": extracted.get("title", "Post YouTube")}}]},
+            "v Plateforme": {"select": {"name": "Youtube Short" if "Short" in extracted.get("format", "") else "Youtube"}},
+            "Statut": {"select": {"name": "🟠 En rédaction"}},
+            "Copywriting": {"rich_text": [{"text": {"content": extracted.get("notes", "")}}]}
+        }
+    elif req.database_type == "marketing":
+        properties = {
+            "Titre de la Campagne": {"title": [{"text": {"content": extracted.get("title", "Campagne Marketing")}}]},
+            "Plateforme Cible": {"select": {"name": "YouTube" if "Short" in extracted.get("format", "") else "Instagram"}},
+            "Objectif": {"select": {"name": "💬 Engagement"}},
+            "Branche": {"select": {"name": "📱 Social Media"}},
+            "Statut": {"select": {"name": "🔵 En cours"}},
+            "Copy / Brief": {"rich_text": [{"text": {"content": extracted.get("notes", "")}}]},
+            "Notes": {"rich_text": [{"text": {"content": extracted.get("style", "")}}]}
+        }
+        
+    notion_payload = {
+        "parent": {"database_id": db_id, "type": "database_id"},
+        "properties": properties
+    }
+    
+    return query_notion("pages", method="POST", data=notion_payload)
 
 # Reference Channels Storage File
 CHANNELS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reference_channels.json")

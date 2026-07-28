@@ -64,7 +64,10 @@
             <section class="gemini-director-panel">
                 <div class="panel-header">
                     <h3>💬 Gemini Director</h3>
-                    <span class="status-indicator online">En ligne</span>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button class="validate-chat-btn" id="validateChatBtn" onclick="validateChatToNotion()" title="Valider et envoyer ce script à Notion">💾 Valider & Envoyer</button>
+                        <span class="status-indicator online">En ligne</span>
+                    </div>
                 </div>
                 <div class="chat-history" id="chatHistory">
                     <div class="message system">
